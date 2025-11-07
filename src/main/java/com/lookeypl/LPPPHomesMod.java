@@ -2,10 +2,9 @@ package com.lookeypl;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.Text;
-
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -56,19 +55,19 @@ public class LPPPHomesMod implements ModInitializer {
     // OP commands we want:
     //   - /home ??? - configure ???
 
-    public static int executeHomeCommand(CommandContext<ServerCommandSource> context) {
-        context.getSource().sendFeedback(() -> Text.literal("Called /home with no arguments"), false);
+    public static int executeHomeCommand(CommandContext<CommandSourceStack> context) {
+        context.getSource().sendSuccess(() -> Component.literal("Called /home with no arguments"), false);
         return 0;
     }
 
-    public static int executeHomeSetCommand(CommandContext<ServerCommandSource> context) {
-        context.getSource().sendFeedback(() -> Text.literal("Called /home set with no arguments"), false);
+    public static int executeHomeSetCommand(CommandContext<CommandSourceStack> context) {
+        context.getSource().sendSuccess(() -> Component.literal("Called /home set with no arguments"), false);
         return 2;
     }
 
-    public static int executeMessageEcho(CommandContext<ServerCommandSource> context) {
+    public static int executeMessageEcho(CommandContext<CommandSourceStack> context) {
         String message = StringArgumentType.getString(context, ECHO_MESSAGE_ARG);
-        context.getSource().sendFeedback(() -> Text.literal("Message: %s".formatted(message)), false);
+        context.getSource().sendSuccess(() -> Component.literal("Message: %s".formatted(message)), false);
         return 1;
     }
 
@@ -81,14 +80,14 @@ public class LPPPHomesMod implements ModInitializer {
         LOGGER.info("Hello Fabric world! This is going to be LPPP Homes world soon (tm).");
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-            LiteralArgumentBuilder<ServerCommandSource> commandBuilder =
-                CommandManager.literal(HOME_COMMAND).executes(LPPPHomesMod::executeHomeCommand);
+            LiteralArgumentBuilder<CommandSourceStack> commandBuilder =
+                Commands.literal(HOME_COMMAND).executes(LPPPHomesMod::executeHomeCommand);
 
-            RequiredArgumentBuilder<ServerCommandSource, String> argBuilder =
-                CommandManager.argument(ECHO_MESSAGE_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeMessageEcho);
+            RequiredArgumentBuilder<CommandSourceStack, String> argBuilder =
+                Commands.argument(ECHO_MESSAGE_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeMessageEcho);
 
-            LiteralArgumentBuilder<ServerCommandSource> subCommandBuilder =
-                CommandManager.literal(HOME_SET_COMMAND).executes(LPPPHomesMod::executeHomeSetCommand);
+            LiteralArgumentBuilder<CommandSourceStack> subCommandBuilder =
+                Commands.literal(HOME_SET_COMMAND).executes(LPPPHomesMod::executeHomeSetCommand);
 
             subCommandBuilder.then(argBuilder);
             commandBuilder.then(subCommandBuilder);
