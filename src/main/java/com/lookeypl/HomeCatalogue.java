@@ -1,12 +1,18 @@
 package com.lookeypl;
 
 import java.util.HashMap;
+import java.util.UUID;
 import java.util.Collection;
 
 
 public class HomeCatalogue {
+    private UUID ownerUUID;
     private HashMap<String, Home> homes = new HashMap<>();
     private Home defaultHome = null;
+
+    public HomeCatalogue(UUID owner) {
+        this.ownerUUID = owner;
+    }
 
     public void add(Home home) {
         if (homes.containsKey(home.getName())) {
@@ -64,14 +70,6 @@ public class HomeCatalogue {
 
         homes.remove(oldName);
         homes.put(newName, home);
-    }
-
-    public void load() {
-        // ...
-    }
-
-    public void save() {
-        // ...
     }
 
     public Home get(String name) {

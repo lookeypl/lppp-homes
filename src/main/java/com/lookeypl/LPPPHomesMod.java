@@ -2,6 +2,7 @@ package com.lookeypl;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
+import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
@@ -48,7 +50,13 @@ public class LPPPHomesMod implements ModInitializer {
 
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static HomeCollection homeCollection = new HomeCollection();
+    public static HomeCollection homeCollection;
+    public static final SavedDataType<HomeCollection> HOME_COLLECTION = new SavedDataType<HomeCollection>(
+        Identifier.fromNamespaceAndPath(LPPPHomesMod.MOD_ID, "lppp_home_collection"), // The unique name for this saved data.
+        HomeCollection::new, // If there's no 'HomeCollection' yet create one and refresh fields.
+        HomeCollection.COUNT_CODEC, // The codec used for serialization/deserialization.
+        null // A data fixer, which is not needed here.
+    );
 
 
     // ===== PLAN OF ACTION ======
@@ -359,10 +367,11 @@ public class LPPPHomesMod implements ModInitializer {
             dispatcher.register(commandBuilder);
         });
 
-        try {
-            homeCollection.load();
-        } catch (Exception e) {
-            LOGGER.error("Failed to load Homes catalogue");
-        }
+        ServerLifecycleEvents.SERVER_STARTED.register((server) -> {
+            // when server starts fetch the whole collection of Homes that is on the server saved with the server... server :)
+            homeCollection = server.getDataStorage().computeIfAbsent(HOME_COLLECTION);
+            homeCollection.incrementRandomNumber();
+            LOGGER.info("Random number is now %d".formatted(homeCollection.getRandomNumber()));
+        });
     }
 }
