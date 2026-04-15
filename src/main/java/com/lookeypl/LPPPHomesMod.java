@@ -6,6 +6,14 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
@@ -17,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -49,7 +58,7 @@ public class LPPPHomesMod implements ModInitializer {
     // on the server.
     //
     // Requirements:
-    //   - TPs player to home they provided
+    //   + TPs player to home they provided
     //   + Supports multiple homes
     //   - Migrate homes from other mods (OP Only)
     //   - Load homes when user joins
@@ -76,21 +85,59 @@ public class LPPPHomesMod implements ModInitializer {
     //
     // OP commands we want:
     //   - /home ??? - configure ???
+    //
+    // BUGS TO FIX:
+    //   - Homes MUST be per world. New world must clean homes. PLease. Please.
+    //   - /home <name> does not work. Fix it. Please.
 
     // Generic versions of commands
 
-    public static int homeCommandInternal(CommandContext<CommandSourceStack> context, String homeName) {
-        UUID playerUUID = context.getSource().getEntity().getUUID();
-        String actualHomeName;
-        if (homeName == "" && homeCollection.exists(playerUUID)) {
-            actualHomeName = homeCollection.get(playerUUID).getDefault().getName();
+    private static String getActuaHomeName(String homeName, UUID playerUUID) {
+        if (homeName == "") {
+            return homeCollection.get(playerUUID).getDefault().getName();
         } else {
-            actualHomeName = homeName;
+            return homeName;
+        }
+    }
+
+    private static ServerLevel getDestinationServerLevel(MinecraftServer server, Identifier destinationId) {
+        for (ServerLevel level: server.getAllLevels()) {
+            if (level.dimension().identifier().compareTo(destinationId) == 0) {
+                return level;
+            }
         }
 
-        // TODO actually TP the player :)
+        return null;
+    }
 
-        context.getSource().sendSuccess(() -> Component.literal("TP to \"%s\"".formatted(actualHomeName)), false);
+    public static int homeCommandInternal(CommandContext<CommandSourceStack> context, String homeName) {
+        if (!context.getSource().isPlayer()) {
+            context.getSource().sendFailure(Component.literal("Command source is not a player"));
+            return 1;
+        }
+
+        try {
+            Entity callerEntity = context.getSource().getEntity();
+            UUID playerUUID = callerEntity.getUUID();
+            String actualHomeName = getActuaHomeName(homeName, playerUUID);
+            Home home = homeCollection.get(playerUUID).get(actualHomeName);
+            Vec2 homeRot = home.getRot();
+
+            ServerLevel destinationLevel = getDestinationServerLevel(context.getSource().getServer(), home.getDimensionIdentifier());
+            if (destinationLevel == null) {
+                context.getSource().sendFailure(Component.literal("Unknown dimension \"%s\".".formatted(home.getDimensionIdentifier())));
+                return 2;
+            }
+
+            TeleportTransition transition = new TeleportTransition(destinationLevel, home.getPos(), new Vec3(0, 0, 0), homeRot.y, homeRot.x, TeleportTransition.DO_NOTHING);
+            callerEntity.teleport(transition);
+
+            context.getSource().sendSuccess(() -> Component.literal("TP to \"%s\"".formatted(actualHomeName)), false);
+        } catch (Exception e) {
+            context.getSource().sendFailure(Component.literal("Failed to TP to home: %s".formatted(e.getMessage())));
+            return 2;
+        }
+
         return 0;
     }
 
@@ -115,30 +162,28 @@ public class LPPPHomesMod implements ModInitializer {
     }
 
     public static int homeSetCommandInternal(CommandContext<CommandSourceStack> context, String homeName) {
-        Vec3 pos = context.getSource().getPosition();
-        Vec2 rot = context.getSource().getRotation();
-
-        if (!context.getSource().isPlayer()) {
-            context.getSource().sendFailure(Component.literal("Command source is not a player"));
+        CommandSourceStack source = context.getSource();
+        if (!source.isPlayer()) {
+            source.sendFailure(Component.literal("Command source is not a player"));
             return 1;
         }
 
         try {
-            UUID playerUUID = context.getSource().getEntity().getUUID();
+            UUID playerUUID = source.getEntity().getUUID();
 
             if (!homeCollection.exists(playerUUID)) {
                 homeCollection.add(playerUUID);
             }
 
-            homeCollection.get(playerUUID).add(new Home(homeName, pos, rot));
+            homeCollection.get(playerUUID).add(new Home(homeName, source.getLevel().dimension().identifier(), source.getPosition(), source.getRotation()));
 
             // TODO save...
         } catch (Exception e) {
-            context.getSource().sendFailure(Component.literal("Failed to add new home: %s".formatted(e.getMessage())));
+            source.sendFailure(Component.literal("Failed to add new home: %s".formatted(e.getMessage())));
             return 2;
         }
 
-        context.getSource().sendSuccess(() -> Component.literal("Added new home \"%s\"".formatted(homeName)), false);
+        source.sendSuccess(() -> Component.literal("Added new home \"%s\"".formatted(homeName)), false);
         return 0;
     }
 
@@ -213,7 +258,7 @@ public class LPPPHomesMod implements ModInitializer {
         } else {
             sendMsg(context, "You have %d homes:".formatted(homes.size()));
             for (Home h : homes) {
-                String homeString = "  - %s (%.2f, %.2f, %.2f)".formatted(h.getName(), h.getPos().x, h.getPos().y, h.getPos().z);
+                String homeString = "  - %s (%.2f, %.2f, %.2f; %s)".formatted(h.getName(), h.getPos().x, h.getPos().y, h.getPos().z, h.getDimensionIdentifier());
                 if (h.isDefault()) {
                     sendMsg(context, homeString, ChatFormatting.ITALIC, ChatFormatting.GRAY);
                 } else {

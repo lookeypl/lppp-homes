@@ -3,8 +3,10 @@ package com.lookeypl;
 import java.util.HashMap;
 import java.util.UUID;
 
+import net.minecraft.world.level.saveddata.SavedData;
 
-public class HomeCollection {
+
+public class HomeCollection extends SavedData {
     private HashMap<UUID, HomeCatalogue> playerHomes = new HashMap<>();
 
     public void load() {
