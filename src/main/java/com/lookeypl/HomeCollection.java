@@ -27,12 +27,14 @@ public class HomeCollection extends SavedData {
         playerHomes = homes;
     }
 
-    public void add(UUID playerUUID, String playerName) {
+    public HomeCatalogue add(UUID playerUUID, String playerName) {
         if (exists(playerUUID)) {
             throw new IllegalArgumentException("Player already exists in Collection; this should not happen, please fix. This is scary. Probably.");
         }
 
-        playerHomes.put(playerUUID, new HomeCatalogue(playerUUID, playerName));
+        HomeCatalogue catalogue = new HomeCatalogue(playerUUID, playerName);
+        playerHomes.put(playerUUID, catalogue);
+        return catalogue;
     }
 
     public void remove(UUID playerUUID) {
@@ -41,6 +43,20 @@ public class HomeCollection extends SavedData {
         }
 
         playerHomes.remove(playerUUID);
+    }
+
+    public UUID findUUID(String playerName) {
+        for (HomeCatalogue catalogue: playerHomes.values()) {
+            if (catalogue.getDirectOwnerName().contentEquals(playerName)) {
+                return catalogue.getOwnerUUID();
+            }
+        }
+
+        return null;
+    }
+
+    public boolean empty() {
+        return (playerHomes.size() == 0);
     }
 
     public HomeCatalogue get(UUID playerUUID) {

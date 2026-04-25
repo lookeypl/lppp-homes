@@ -12,7 +12,7 @@ import net.minecraft.core.UUIDUtil;
 public class HomeCatalogue {
     public static final Codec<HomeCatalogue> CODEC = RecordCodecBuilder.create(instance -> instance.group(
         UUIDUtil.CODEC.fieldOf("owner_uuid").forGetter(HomeCatalogue::getOwnerUUID),
-        Codec.STRING.fieldOf("owner_name").forGetter(HomeCatalogue::getOwnerName),
+        Codec.STRING.fieldOf("owner_name").forGetter(HomeCatalogue::getDirectOwnerName),
         Codec.STRING.fieldOf("default").forGetter(HomeCatalogue::getDefaultHomeName),
         Codec.unboundedMap(Codec.STRING, Home.CODEC).xmap(
             HashMap<String, Home>::new, home -> home
@@ -56,8 +56,6 @@ public class HomeCatalogue {
             throw new IllegalArgumentException("You don't have a home to delete :(");
         }
 
-        // TODO - what if we delete a default home but there are others on the list???
-
         if (name == "") {
             if (homes.size() > 1) {
                 throw new IllegalArgumentException("Must provide home name to delete");
@@ -70,6 +68,9 @@ public class HomeCatalogue {
             }
 
             homes.remove(name);
+            if (defaultHome.contentEquals(name) && homes.size() > 0) {
+                defaultHome = homes.values().iterator().next().getName();
+            }
         }
 
         if (homes.size() == 0) {
@@ -118,12 +119,22 @@ public class HomeCatalogue {
     }
 
 
-    private UUID getOwnerUUID() {
+    public UUID getOwnerUUID() {
         return ownerUUID;
     }
 
-    public String getOwnerName() {
+    public String getDirectOwnerName() {
         return ownerName;
+    }
+
+    public String getOwnerName() {
+        String name = getDirectOwnerName();
+        if (name.length() > 0) {
+            return name;
+        } else {
+            String uuidString = ownerUUID.toString();
+            return "??? (%s...%s)".formatted(uuidString.substring(0, 4), uuidString.substring(uuidString.length() - 4, uuidString.length()));
+        }
     }
 
     public String getDefaultHomeName() {
