@@ -8,12 +8,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.world.phys.Vec2;
@@ -22,12 +20,12 @@ import net.minecraft.world.phys.Vec3;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Set;
 import java.util.UUID;
 
 
@@ -39,6 +37,7 @@ public class LPPPHomesMod implements ModInitializer {
     public static final String HOME_DELETE_COMMAND = "delete";
     public static final String HOME_HELP_COMMAND = "help";
     public static final String HOME_LIST_COMMAND = "list";
+    public static final String HOME_LIST_ALL_COMMAND = "listall";
     public static final String HOME_RENAME_COMMAND = "rename";
     public static final String HOME_SET_COMMAND = "set";
 
@@ -51,10 +50,10 @@ public class LPPPHomesMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public static HomeCollection homeCollection;
-    public static final SavedDataType<HomeCollection> HOME_COLLECTION = new SavedDataType<HomeCollection>(
+    public static final SavedDataType<HomeCollection> HOME_COLLECTION_SAVED_DATA = new SavedDataType<HomeCollection>(
         Identifier.fromNamespaceAndPath(LPPPHomesMod.MOD_ID, "lppp_home_collection"), // The unique name for this saved data.
         HomeCollection::new, // If there's no 'HomeCollection' yet create one and refresh fields.
-        HomeCollection.COUNT_CODEC, // The codec used for serialization/deserialization.
+        HomeCollection.CODEC, // The codec used for serialization/deserialization.
         null // A data fixer, which is not needed here.
     );
 
@@ -69,11 +68,11 @@ public class LPPPHomesMod implements ModInitializer {
     //   + TPs player to home they provided
     //   + Supports multiple homes
     //   - Migrate homes from other mods (OP Only)
-    //   - Load homes when user joins
-    //   - Save homes when user leaves OR user changes their homes (sets, deletes, renames, defaults)
+    //   + Load homes when user joins
+    //   + Save homes when user leaves OR user changes their homes (sets, deletes, renames, defaults)
     //
     // Commands we want:
-    //   - /home <name> - tps you to home of given name
+    //   + /home <name> - tps you to home of given name
     //     \_ CAN be called with <name> which will tp player to home of given name
     //     \_ CAN be called WITHOUT <name> to tp player to default home
     //   + /home set <name> - Sets a new home where player is located at the time of calling the command
@@ -92,15 +91,19 @@ public class LPPPHomesMod implements ModInitializer {
     //     \_ result printed depends on who called it (ops will also see op commands listed)
     //
     // OP commands we want:
-    //   - /home ??? - configure ???
+    //   - /home import blossomhomes
+    //   + /home listall
+    //   - /home deleteplayer
     //
     // BUGS TO FIX:
-    //   - Homes MUST be per world. New world must clean homes. PLease. Please.
-    //   - /home <name> does not work. Fix it. Please.
+    //   + Homes MUST be per world. New world must clean homes. PLease. Please.
+    //   + /home <name> does not work. Fix it. Please.
+    //   + Propagate setDirty() inside HomeCatalogue and Home
+    //   - Suggestion provider for home names?
 
     // Generic versions of commands
 
-    private static String getActuaHomeName(String homeName, UUID playerUUID) {
+    private static String getActualHomeName(String homeName, UUID playerUUID) {
         if (homeName == "") {
             return homeCollection.get(playerUUID).getDefault().getName();
         } else {
@@ -127,7 +130,7 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             Entity callerEntity = context.getSource().getEntity();
             UUID playerUUID = callerEntity.getUUID();
-            String actualHomeName = getActuaHomeName(homeName, playerUUID);
+            String actualHomeName = getActualHomeName(homeName, playerUUID);
             Home home = homeCollection.get(playerUUID).get(actualHomeName);
             Vec2 homeRot = home.getRot();
 
@@ -158,8 +161,7 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             UUID playerUUID = context.getSource().getEntity().getUUID();
             homeCollection.get(playerUUID).delete(homeName);
-
-            // TODO save...
+            homeCollection.setDirty();
         } catch (Exception e) {
             context.getSource().sendFailure(Component.literal("Failed to delete home \"%s\": %s".formatted(homeName, e.getMessage())));
             return 2;
@@ -180,12 +182,11 @@ public class LPPPHomesMod implements ModInitializer {
             UUID playerUUID = source.getEntity().getUUID();
 
             if (!homeCollection.exists(playerUUID)) {
-                homeCollection.add(playerUUID);
+                homeCollection.add(playerUUID, source.getTextName());
             }
 
             homeCollection.get(playerUUID).add(new Home(homeName, source.getLevel().dimension().identifier(), source.getPosition(), source.getRotation()));
-
-            // TODO save...
+            homeCollection.setDirty();
         } catch (Exception e) {
             source.sendFailure(Component.literal("Failed to add new home: %s".formatted(e.getMessage())));
             return 2;
@@ -228,6 +229,7 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             UUID playerUUID = context.getSource().getEntity().getUUID();
             homeCollection.get(playerUUID).setDefault(homeName);
+            homeCollection.setDirty();
         } catch (Exception e) {
             context.getSource().sendFailure(Component.literal("Failed to set home \"%s\" as default: %s".formatted(homeName, e.getMessage())));
             return 2;
@@ -252,6 +254,26 @@ public class LPPPHomesMod implements ModInitializer {
         return 0;
     }
 
+    private static void listHomes(CommandContext<CommandSourceStack> context, String username, Collection<Home> homes, String defaultHome) {
+        if (homes.size() == 0) {
+            sendMsg(context, "You don't have a home :(");
+        } else {
+            if (homes.size() == 1) {
+                sendMsg(context, "%s has 1 home:".formatted(username));
+            } else {
+                sendMsg(context, "%s has %d homes:".formatted(username, homes.size()));
+            }
+            for (Home h : homes) {
+                String homeString = "  - %s (%.2f, %.2f, %.2f; %s)".formatted(h.getName(), h.getPos().x, h.getPos().y, h.getPos().z, h.getDimensionIdentifier());
+                if (h.getName().contentEquals(defaultHome)) {
+                    sendMsg(context, homeString, ChatFormatting.ITALIC, ChatFormatting.GRAY);
+                } else {
+                    sendMsg(context, homeString, ChatFormatting.GRAY);
+                }
+            }
+        }
+    }
+
     public static int executeHomeListCommand(CommandContext<CommandSourceStack> context) {
         UUID playerUUID = context.getSource().getEntity().getUUID();
         if (!homeCollection.exists(playerUUID)) {
@@ -260,22 +282,26 @@ public class LPPPHomesMod implements ModInitializer {
         }
 
         Collection<Home> homes = homeCollection.get(playerUUID).list();
+        String defaultHomeName = homeCollection.get(playerUUID).getDefaultHomeName();
 
-        if (homes.size() == 0) {
-            sendMsg(context, "You don't have a home :(");
-        } else {
-            sendMsg(context, "You have %d homes:".formatted(homes.size()));
-            for (Home h : homes) {
-                String homeString = "  - %s (%.2f, %.2f, %.2f; %s)".formatted(h.getName(), h.getPos().x, h.getPos().y, h.getPos().z, h.getDimensionIdentifier());
-                if (h.isDefault()) {
-                    sendMsg(context, homeString, ChatFormatting.ITALIC, ChatFormatting.GRAY);
-                } else {
-                    sendMsg(context, homeString, ChatFormatting.GRAY);
-                }
-            }
-        }
+        listHomes(context, context.getSource().getTextName(), homes, defaultHomeName);
 
         return homes.size();
+    }
+
+    public static int executeHomeListAllCommand(CommandContext<CommandSourceStack> context) {
+        UUID playerUUID = context.getSource().getEntity().getUUID();
+        if (!homeCollection.exists(playerUUID)) {
+            sendMsg(context, "You don't have a home :(");
+            return 0;
+        }
+
+        Collection<HomeCatalogue> catalogues = homeCollection.getCatalogues();
+        for (HomeCatalogue c: catalogues) {
+            listHomes(context, c.getOwnerName(), c.list(), c.getDefaultHomeName());
+        }
+
+        return 0;
     }
 
     public static int executeHomeRenameCommand(CommandContext<CommandSourceStack> context) {
@@ -290,6 +316,7 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             UUID playerUUID = context.getSource().getEntity().getUUID();
             homeCollection.get(playerUUID).rename(oldHomeName, newHomeName);
+            homeCollection.setDirty();
         } catch (Exception e) {
             context.getSource().sendFailure(Component.literal("Failed to rename home \"%s\" to \"%s\": %s".formatted(oldHomeName, newHomeName, e.getMessage())));
             return 2;
@@ -341,6 +368,12 @@ public class LPPPHomesMod implements ModInitializer {
             LiteralArgumentBuilder<CommandSourceStack> listCommandBuilder =
                 Commands.literal(HOME_LIST_COMMAND).executes(LPPPHomesMod::executeHomeListCommand);
 
+            LiteralArgumentBuilder<CommandSourceStack> listAllCommandBuilder =
+                Commands.literal(HOME_LIST_ALL_COMMAND)
+                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_MODERATOR))
+                        .executes(LPPPHomesMod::executeHomeListAllCommand);
+
+
             LiteralArgumentBuilder<CommandSourceStack> renameCommandBuilder =
                 Commands.literal(HOME_RENAME_COMMAND)
                 .then(
@@ -357,21 +390,24 @@ public class LPPPHomesMod implements ModInitializer {
                     Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeSetNamedCommand)
                 );
 
+            RequiredArgumentBuilder<CommandSourceStack, String> nameArg =
+                Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeNamedCommand);
+
             commandBuilder.then(defaultCommandBuilder);
             commandBuilder.then(deleteCommandBuilder);
             commandBuilder.then(helpCommandBuilder);
             commandBuilder.then(listCommandBuilder);
+            commandBuilder.then(listAllCommandBuilder);
             commandBuilder.then(renameCommandBuilder);
             commandBuilder.then(setCommandBuilder);
+            commandBuilder.then(nameArg);
 
             dispatcher.register(commandBuilder);
         });
 
         ServerLifecycleEvents.SERVER_STARTED.register((server) -> {
             // when server starts fetch the whole collection of Homes that is on the server saved with the server... server :)
-            homeCollection = server.getDataStorage().computeIfAbsent(HOME_COLLECTION);
-            homeCollection.incrementRandomNumber();
-            LOGGER.info("Random number is now %d".formatted(homeCollection.getRandomNumber()));
+            homeCollection = server.getDataStorage().computeIfAbsent(HOME_COLLECTION_SAVED_DATA);
         });
     }
 }
