@@ -65,49 +65,6 @@ public class LPPPHomesMod implements ModInitializer {
     );
 
 
-    // ===== PLAN OF ACTION ======
-    //
-    // The mode will be complete shall we complete the below functionalities
-    // in the mod source code, as the needs of the mod shall then meet our needs
-    // on the server.
-    //
-    // Requirements:
-    //   + TPs player to home they provided
-    //   + Supports multiple homes
-    //   + Migrate homes from other mods (OP Only)
-    //   + Load homes when user joins
-    //   + Save homes when user leaves OR user changes their homes (sets, deletes, renames, defaults)
-    //
-    // Commands we want:
-    //   + /home <name> - tps you to home of given name
-    //     \_ CAN be called with <name> which will tp player to home of given name
-    //     \_ CAN be called WITHOUT <name> to tp player to default home
-    //   + /home set <name> - Sets a new home where player is located at the time of calling the command
-    //     \_ <name> is required - fails without it
-    //     \_ first set home is the default by default
-    //   + /home delete <name> - Deletes an existing home
-    //     \_ <name> is required unless there is one home on the list
-    //     \_ confirmation required? maybe?
-    //   + /home list - Lists homes available to the caller
-    //     \_ OPs should be able to look up others homes
-    //     \_ List should include - home name, coordinates
-    //   + /home default <name> - Changes default home to <name>
-    //     \_ <name> is required
-    //   + /home rename <home> <newname> - renames a <home> to <newname>
-    //   + /home help - prints help with available commands
-    //     \_ result printed depends on who called it (ops will also see op commands listed)
-    //
-    // OP commands we want:
-    //   + /home import blossomhomes
-    //   + /home listall
-    //   + /home deleteplayer
-    //
-    // BUGS TO FIX:
-    //   + Homes MUST be per world. New world must clean homes. PLease. Please.
-    //   + /home <name> does not work. Fix it. Please.
-    //   + Propagate setDirty() inside HomeCatalogue and Home
-    //   + Suggestion provider for home names?
-
     // Generic versions of commands
 
     private static String getActualHomeName(String homeName, UUID playerUUID) {
