@@ -18,10 +18,14 @@ public class HomeNameSuggestionProvider implements SuggestionProvider<CommandSou
     @Override
     public CompletableFuture<Suggestions> getSuggestions(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder)
             throws CommandSyntaxException {
+        if (!context.getSource().isPlayer()) {
+            return builder.buildFuture();
+        }
+
         HomeCollection collection = context.getSource().getServer().getDataStorage().get(LPPPHomesMod.HOME_COLLECTION_SAVED_DATA);
         UUID sourceUUID = context.getSource().getEntity().getUUID();
 
-        if (collection.exists(sourceUUID)) {
+        if (collection.exists(sourceUUID, context.getSource().getTextName())) {
             HomeCatalogue catalogue = collection.get(sourceUUID);
             for (Home h: catalogue.list()) {
                 builder.suggest(h.getName());

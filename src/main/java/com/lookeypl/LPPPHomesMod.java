@@ -94,6 +94,11 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             Entity callerEntity = context.getSource().getEntity();
             UUID playerUUID = callerEntity.getUUID();
+            if (!homeCollection.exists(playerUUID, context.getSource().getTextName())) {
+                sendMsg(context, "You don't have a home :(");
+                return 1;
+            }
+
             String actualHomeName = getActualHomeName(homeName, playerUUID);
             Home home = homeCollection.get(playerUUID).get(actualHomeName);
             Vec2 homeRot = home.getRot();
@@ -124,6 +129,11 @@ public class LPPPHomesMod implements ModInitializer {
 
         try {
             UUID playerUUID = context.getSource().getEntity().getUUID();
+            if (!homeCollection.exists(playerUUID, context.getSource().getTextName())) {
+                sendMsg(context, "You don't have a home :(");
+                return 1;
+            }
+
             homeCollection.get(playerUUID).delete(homeName);
             homeCollection.setDirty();
         } catch (Exception e) {
@@ -145,7 +155,7 @@ public class LPPPHomesMod implements ModInitializer {
         try {
             UUID playerUUID = source.getEntity().getUUID();
 
-            if (!homeCollection.exists(playerUUID)) {
+            if (!homeCollection.exists(playerUUID, source.getTextName())) {
                 homeCollection.add(playerUUID, source.getTextName());
             }
 
@@ -310,7 +320,7 @@ public class LPPPHomesMod implements ModInitializer {
 
     public static int executeHomeListCommand(CommandContext<CommandSourceStack> context) {
         UUID playerUUID = context.getSource().getEntity().getUUID();
-        if (!homeCollection.exists(playerUUID)) {
+        if (!homeCollection.exists(playerUUID, context.getSource().getTextName())) {
             sendMsg(context, "You don't have a home :(");
             return 0;
         }
@@ -349,8 +359,13 @@ public class LPPPHomesMod implements ModInitializer {
             return 1;
         }
 
+
         try {
             UUID playerUUID = context.getSource().getEntity().getUUID();
+            if (!homeCollection.exists(playerUUID, context.getSource().getTextName())) {
+                sendMsg(context, "You don't have a home :(");
+                return 1;
+            }
             homeCollection.get(playerUUID).rename(oldHomeName, newHomeName);
             homeCollection.setDirty();
         } catch (Exception e) {

@@ -71,8 +71,21 @@ public class HomeCollection extends SavedData {
         return playerHomes.values();
     }
 
-    public boolean exists(UUID playerUUID) {
+    private boolean exists(UUID playerUUID) {
         return playerHomes.containsKey(playerUUID);
+    }
+
+    public boolean exists(UUID playerUUID, String playerName) {
+        boolean exists = exists(playerUUID);
+        if (exists) {
+            HomeCatalogue homes = get(playerUUID);
+            if (!homes.getDirectOwnerName().contentEquals(playerName)) {
+                homes.updateOwnerName(playerName);
+                setDirty();
+            }
+        }
+
+        return exists;
     }
 
     private HashMap<UUID, HomeCatalogue> getCataloguesMap() {

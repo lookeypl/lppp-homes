@@ -137,6 +137,10 @@ public class HomeCatalogue {
         }
     }
 
+    public void updateOwnerName(String name) {
+        ownerName = name;
+    }
+
     public String getDefaultHomeName() {
         return defaultHome;
     }
