@@ -234,7 +234,7 @@ public class LPPPHomesMod implements ModInitializer {
     }
 
     public static int executeHomeHelpCommand(CommandContext<CommandSourceStack> context) {
-        boolean isModerator = context.getSource().permissions().hasPermission(Permissions.COMMANDS_ADMIN);
+        boolean isModerator = context.getSource().permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
         sendMsg(context, "---- LPPP Homes mod help page ----");
         sendMsg(context, "Available commands:");
         sendMsg(context, "  - /home <name> - TPs you to home of given name. Omit name to TP to default home.", ChatFormatting.GRAY);
@@ -244,7 +244,7 @@ public class LPPPHomesMod implements ModInitializer {
         sendMsg(context, "  - /home rename <home> <newname> - renames a <home> to <newname>", ChatFormatting.GRAY);
         sendMsg(context, "  - /home list - Lists available homes.", ChatFormatting.GRAY);
         if (isModerator) {
-            sendMsg(context, "Available moderator commands:");
+            sendMsg(context, "Available operator commands:");
             sendMsg(context, "  - /home listall - Lists all homes known to the mod.", ChatFormatting.GRAY);
             sendMsg(context, "  - /home deleteplayer - Removes player and their Homes from the collection.", ChatFormatting.GRAY);
             sendMsg(context, "  - /home import <provider> - Imports homes from a different mod. Available providers:", ChatFormatting.GRAY);
@@ -290,7 +290,7 @@ public class LPPPHomesMod implements ModInitializer {
 
     private static void listHomes(CommandContext<CommandSourceStack> context, String username, Collection<Home> homes, String defaultHome) {
         if (homes.size() == 0) {
-            sendMsg(context, "You don't have a home :(");
+            sendMsg(context, "%s has no homes.".formatted(username));
         } else {
             if (homes.size() == 1) {
                 sendMsg(context, "%s has 1 home:".formatted(username));
@@ -375,11 +375,7 @@ public class LPPPHomesMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        // This code runs as soon as Minecraft is in a mod-load-ready state.
-        // However, some things (like resources) may still be uninitialized.
-        // Proceed with mild caution.
-
-        LOGGER.info("Hello Fabric world! This is going to be LPPP Homes world soon (tm).");
+        LOGGER.info("Hello Fabric world! This is LPPP Homes mod reporting for duty.");
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             LiteralArgumentBuilder<CommandSourceStack> commandBuilder =
@@ -398,19 +394,46 @@ public class LPPPHomesMod implements ModInitializer {
                             Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeDeleteNamedCommand)
                         );
 
+            LiteralArgumentBuilder<CommandSourceStack> helpCommandBuilder =
+                Commands.literal(HOME_HELP_COMMAND).executes(LPPPHomesMod::executeHomeHelpCommand);
+
+            LiteralArgumentBuilder<CommandSourceStack> listCommandBuilder =
+                Commands.literal(HOME_LIST_COMMAND).executes(LPPPHomesMod::executeHomeListCommand);
+
+            LiteralArgumentBuilder<CommandSourceStack> renameCommandBuilder =
+                Commands.literal(HOME_RENAME_COMMAND)
+                .then(
+                    Commands.argument(HOME_OLD_NAME_ARG, StringArgumentType.string())
+                    .then(
+                        Commands.argument(HOME_NEW_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeRenameCommand)
+                    )
+                );
+
+            LiteralArgumentBuilder<CommandSourceStack> setCommandBuilder =
+                Commands.literal(HOME_SET_COMMAND)
+                .executes(LPPPHomesMod::executeHomeSetCommand)
+                .then(
+                    Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeSetNamedCommand)
+                );
+
+            RequiredArgumentBuilder<CommandSourceStack, String> nameArg =
+                Commands.argument(HOME_NAME_ARG, StringArgumentType.string())
+                .suggests(new HomeNameSuggestionProvider())
+                .executes(LPPPHomesMod::executeHomeNamedCommand);
+
+
+            // operator command list
+
             LiteralArgumentBuilder<CommandSourceStack> deletePlayerCommandBuilder =
                 Commands.literal(HOME_DELETEPLAYER_COMMAND)
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                         .then(
                             Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeDeletePlayerCommand)
                         );
 
-            LiteralArgumentBuilder<CommandSourceStack> helpCommandBuilder =
-                Commands.literal(HOME_HELP_COMMAND).executes(LPPPHomesMod::executeHomeHelpCommand);
-
             LiteralArgumentBuilder<CommandSourceStack> importCommandBuilder =
                 Commands.literal(HOME_IMPORT_COMMAND)
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                         .then(
                             Commands.literal(HOME_IMPORT_BLOSSOMHOMES_COMMAND).executes(LPPPHomesMod::executeHomeImportCommand)
                                     .then(
@@ -418,46 +441,25 @@ public class LPPPHomesMod implements ModInitializer {
                                     )
                         );
 
-            LiteralArgumentBuilder<CommandSourceStack> listCommandBuilder =
-                Commands.literal(HOME_LIST_COMMAND).executes(LPPPHomesMod::executeHomeListCommand);
-
             LiteralArgumentBuilder<CommandSourceStack> listAllCommandBuilder =
                 Commands.literal(HOME_LIST_ALL_COMMAND)
-                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_ADMIN))
+                        .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                         .executes(LPPPHomesMod::executeHomeListAllCommand);
 
 
-            LiteralArgumentBuilder<CommandSourceStack> renameCommandBuilder =
-                Commands.literal(HOME_RENAME_COMMAND)
-                        .then(
-                            Commands.argument(HOME_OLD_NAME_ARG, StringArgumentType.string())
-                            .then(
-                                Commands.argument(HOME_NEW_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeRenameCommand)
-                            )
-                        );
-
-            LiteralArgumentBuilder<CommandSourceStack> setCommandBuilder =
-                Commands.literal(HOME_SET_COMMAND)
-                        .executes(LPPPHomesMod::executeHomeSetCommand)
-                        .then(
-                            Commands.argument(HOME_NAME_ARG, StringArgumentType.string()).executes(LPPPHomesMod::executeHomeSetNamedCommand)
-                        );
-
-            RequiredArgumentBuilder<CommandSourceStack, String> nameArg =
-                Commands.argument(HOME_NAME_ARG, StringArgumentType.string())
-                        .suggests(new HomeNameSuggestionProvider())
-                        .executes(LPPPHomesMod::executeHomeNamedCommand);
+            // Build the CLI
 
             commandBuilder.then(defaultCommandBuilder);
             commandBuilder.then(deleteCommandBuilder);
-            commandBuilder.then(deletePlayerCommandBuilder);
             commandBuilder.then(helpCommandBuilder);
-            commandBuilder.then(importCommandBuilder);
             commandBuilder.then(listCommandBuilder);
-            commandBuilder.then(listAllCommandBuilder);
             commandBuilder.then(renameCommandBuilder);
             commandBuilder.then(setCommandBuilder);
             commandBuilder.then(nameArg);
+
+            commandBuilder.then(deletePlayerCommandBuilder);
+            commandBuilder.then(importCommandBuilder);
+            commandBuilder.then(listAllCommandBuilder);
 
             dispatcher.register(commandBuilder);
         });
